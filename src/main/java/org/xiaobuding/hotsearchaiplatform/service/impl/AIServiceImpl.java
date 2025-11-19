@@ -68,16 +68,17 @@ public class AIServiceImpl implements AIService {
             
             prompt.append("\n=== 分析要求 ===\n");
             prompt.append("请以JSON格式返回分析结果，包含以下字段：\n");
-            prompt.append("1. summary: 全局趋势总结（150-200字，分析当前热点事件的主要方向、社会关注焦点、各平台内容差异）\n");
+            prompt.append("1. summary: 全局趋势总结（必须分点说明，使用\\n分隔，每点以\"1. \"、\"2. \"、\"3. \"开头，共分为3-5点，每点30-50字）\n");
             prompt.append("2. coreTopics: 核心话题数组（3-5个），每个话题包含：\n");
             prompt.append("   - topic: 话题名称（简洁明了）\n");
-            prompt.append("   - description: 话题描述（50-80字，说明为什么重要、涉及哪些平台、影响范围）\n");
+            prompt.append("   - description: 话题描述（必须分点说明，使用\\n分隔，每点以\"· \"开头，共分为2-3点，每点20-30字）\n");
             prompt.append("   - platforms: 涉及的平台数组（如[\"WEIBO\", \"DOUYIN\"]）\n");
             prompt.append("   - heatLevel: 热度等级（HIGH/MEDIUM/LOW）\n");
-            prompt.append("3. crossPlatformInsights: 跨平台洞察数组（3-5条，每条30-50字，分析不同平台对同一事件的关注差异）\n");
+            prompt.append("3. crossPlatformInsights: 跨平台洞察数组（3-5条，每条必须是一个完整的观点，30-50字）\n");
             prompt.append("\n注意：\n");
             prompt.append("- 必须返回有效的JSON格式\n");
             prompt.append("- 所有字段都必须填写，不能为空\n");
+            prompt.append("- summary和description必须分点列出，不能是一整段文字\n");
             prompt.append("- 分析要具体、有深度，避免泛泛而谈\n");
             prompt.append("- 核心话题必须从实际热搜数据中提取，不能编造\n");
             
@@ -128,10 +129,16 @@ public class AIServiceImpl implements AIService {
             List<HotSearchItem> relevantItems = collectRelevantItems(question, platformFilter);
             
             StringBuilder prompt = new StringBuilder();
-            prompt.append("Question: ").append(question).append("\n\nRelevant hot searches:\n");
+            prompt.append("你是一个专业的热搜数据分析助手。请根据以下热搜数据回答用户问题。\n\n");
+            prompt.append("用户问题：").append(question).append("\n\n相关热搜数据：\n");
             relevantItems.stream().limit(10).forEach(item ->
                     prompt.append("- ").append(item.getTitle()).append(" (").append(item.getPlatform()).append(")\n"));
-            prompt.append("\nPlease answer in JSON format with 'answer' field.");
+            prompt.append("\n回答要求：\n");
+            prompt.append("1. 必须分点回答，使用\\n分隔，每点以\"1. \"、\"2. \"、\"3. \"开头\n");
+            prompt.append("2. 每个要点要简洁明了，30-50字\n");
+            prompt.append("3. 共分为3-5个要点\n");
+            prompt.append("4. 不要使用一整段文字，必须分点列出\n");
+            prompt.append("\n请以JSON格式返回，包含'answer'字段。");
             
             String aiResponse = aiCoreService.callDashScopeAPI(prompt.toString());
             QNAResponse response = parseQNAResponse(aiResponse, conversationId);

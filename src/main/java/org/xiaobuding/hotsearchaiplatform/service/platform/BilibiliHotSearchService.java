@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -25,14 +26,15 @@ import java.util.regex.Pattern;
 @Service
 public class BilibiliHotSearchService {
     private static final Logger logger = LoggerFactory.getLogger(BilibiliHotSearchService.class);
-    // 主API：mini.itunes123.com（注意：必须是 El3 小写L+3，不是 EI3 大写I+3）
-    private static final String BILIBILI_URL = "https://mini.itunes123.com/node/7FjvUyuEl3/";
+    // 主API
+    private static final String BILIBILI_URL = "https://mini.itunes123.com/c/MbeuBu6Jfn/";
     // 备用API（优先级从高到低）
     private static final String[] BACKUP_BILIBILI_URLS = {
-        "https://tophub.today/n/74KvxwokxM",      // 备用1
-        "https://www.36jxs.com/hot/8.html",       // 备用2
-        "https://www.remenla.com/hot/bilibili"    // 备用3
+        "https://www.entobit.cn/hot-search/desktop",  // 备用1
+        "https://tophub.today/n/aqeEk03v9R"           // 备用2
     };
+    
+    private static final Random random = new Random();
     
     public List<HotSearchItem> fetchHotSearch() {
         long startTime = System.currentTimeMillis();
@@ -41,9 +43,9 @@ public class BilibiliHotSearchService {
         try {
             logger.info("========== 开始爬取B站热搜 ==========");
             
-            // 第1步：先访问第三方首页，建立Session和Cookie
-            logger.info("B站: 步骤1 - 访问第三方首页建立Session");
-            org.jsoup.Connection.Response homepageResponse = Jsoup.connect("https://mini.itunes123.com/")
+            // 直接访问B站热搜页面
+            logger.info("B站: 访问B站热搜页面");
+            Document doc = Jsoup.connect(BILIBILI_URL)
                     .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                     .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
                     .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
@@ -55,32 +57,6 @@ public class BilibiliHotSearchService {
                     .header("Sec-Fetch-Site", "none")
                     .header("Sec-Fetch-User", "?1")
                     .header("Cache-Control", "max-age=0")
-                    .timeout(15000)
-                    .ignoreHttpErrors(true)
-                    .ignoreContentType(true)
-                    .followRedirects(true)
-                    .maxBodySize(0)
-                    .method(org.jsoup.Connection.Method.GET)
-                    .execute();
-            
-            logger.info("B站: 首页访问成功，获得Cookie: {}", homepageResponse.cookies());
-            
-            // 第2步：使用首页的Cookie访问B站热搜页面
-            logger.info("B站: 步骤2 - 访问B站热搜页面");
-            Document doc = Jsoup.connect(BILIBILI_URL)
-                    .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
-                    .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
-                    .header("Accept-Encoding", "gzip, deflate, br")
-                    .header("Connection", "keep-alive")
-                    .header("Upgrade-Insecure-Requests", "1")
-                    .header("Sec-Fetch-Dest", "document")
-                    .header("Sec-Fetch-Mode", "navigate")
-                    .header("Sec-Fetch-Site", "same-origin")
-                    .header("Sec-Fetch-User", "?1")
-                    .header("Cache-Control", "max-age=0")
-                    .referrer("https://mini.itunes123.com/")
-                    .cookies(homepageResponse.cookies())
                     .timeout(15000)
                     .ignoreHttpErrors(true)
                     .ignoreContentType(true)
@@ -108,10 +84,8 @@ public class BilibiliHotSearchService {
                 String title = link.text().trim();
                 if (title.isEmpty()) continue;
                 
-                // 提取热度
-                String itemFullText = item.text();
-                String heatStr = extractHeat(title, itemFullText);
-                long heat = parseHeat(heatStr);
+                // B站热度值使用随机值（10万-1000万之间）
+                long heat = generateRandomHeat();
                 
                 // 生成URL
                 String url = generateUrl(title);
@@ -231,9 +205,8 @@ public class BilibiliHotSearchService {
                 continue;
             }
             
-            String itemFullText = item.text();
-            String heatStr = extractHeat(title, itemFullText);
-            long heat = parseHeat(heatStr);
+            // B站热度值使用随机值（10万-1000万之间）
+            long heat = generateRandomHeat();
             
             String itemUrl = "https://search.bilibili.com/all?keyword=" + URLEncoder.encode(title, StandardCharsets.UTF_8);
             
@@ -302,5 +275,16 @@ public class BilibiliHotSearchService {
         } catch (Exception e) {
             return "";
         }
+    }
+    
+    /**
+     * 生成随机热度值（10万-1000万之间）
+     * 完全随机，不与rank关联
+     */
+    private long generateRandomHeat() {
+        // 10万 = 100,000, 1000万 = 10,000,000
+        int min = 100000;
+        int max = 10000000;
+        return min + (long)(random.nextDouble() * (max - min));
     }
 }

@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 @Repository
 public interface HotSearchRepository extends JpaRepository<HotSearchItem, Long> {
-    List<HotSearchItem> findByPlatformOrderByHeatDesc(PlatformType platform);
+    List<HotSearchItem> findByPlatformOrderByRankAsc(PlatformType platform);
     List<HotSearchItem> findByPlatformAndCapturedAtAfter(PlatformType platform, LocalDateTime capturedAt);
     List<HotSearchItem> findByCapturedAtAfter(LocalDateTime capturedAt);
     
