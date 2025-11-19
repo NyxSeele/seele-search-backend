@@ -84,7 +84,30 @@ public class HotSearchController {
     public ResponseEntity<List<HotSearchItem>> refreshHotSearches() {
         try {
             logger.info("Frontend refresh request");
-            List<HotSearchItem> items = hotSearchService.refreshHotSearches();
+            List<HotSearchItem> items = null;
+            
+            // Try to get fresh data with timeout fallback
+            try {
+                items = hotSearchService.refreshHotSearches();
+                if (items == null || items.isEmpty()) {
+                    logger.warn("Refresh returned empty data, using cache fallback");
+                    items = cacheService.getAllCached();
+                    if (items == null || items.isEmpty()) {
+                        items = getLatestHotSearchWithFallback();
+                    }
+                }
+            } catch (Exception ex) {
+                logger.warn("Refresh failed, using cache fallback: {}", ex.getMessage());
+                items = cacheService.getAllCached();
+                if (items == null || items.isEmpty()) {
+                    items = getLatestHotSearchWithFallback();
+                }
+            }
+            
+            if (items == null) {
+                items = new ArrayList<>();
+            }
+            
             items = filterDegradedData(items);
             items = repairHotSearchItems(items);
             // 按rank升序排序（rank 1是第一名，rank小的排前面）
@@ -94,7 +117,7 @@ public class HotSearchController {
             headers.add("X-Cache-Control", "max-age=60");
             return ResponseEntity.ok().headers(headers).body(items);
         } catch (Exception ex) {
-            logger.error("Refresh failed", ex);
+            logger.error("Refresh failed completely", ex);
             return ResponseEntity.status(500).build();
         }
     }
