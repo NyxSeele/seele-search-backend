@@ -25,13 +25,16 @@ import java.util.regex.Pattern;
 @Service
 public class WeiboHotSearchService {
     private static final Logger logger = LoggerFactory.getLogger(WeiboHotSearchService.class);
-    // 主API
+    // 主API（API1）
     private static final String WEIBO_URL = "https://mini.itunes123.com/node/3jMB6le6MM/";
-    // 备用API（优先级从高到低）
+    // 备用API（API2 ~ API4），优先级从高到低
+    // API2: rebang.today
+    // API3: tophub.today
+    // API4: 36jxs.com
     private static final String[] BACKUP_WEIBO_URLS = {
-        "https://weibo.com/hot/search",           // 官方API（优先）
-        "https://tophub.today/n/KqndgxeLl9",      // 备用1
-        "https://rebang.today/?tab=weibo"         // 备用2
+        "https://rebang.today/?tab=weibo",          // 备用API2
+        "https://tophub.today/n/KqndgxeL19",        // 备用API3
+        "https://www.36jxs.com/hot/5.html"          // 备用API4
     };
     
     public List<HotSearchItem> fetchHotSearch() {
@@ -167,7 +170,7 @@ public class WeiboHotSearchService {
         // 按优先级尝试每个备用API
         for (int i = 0; i < BACKUP_WEIBO_URLS.length; i++) {
             String backupUrl = BACKUP_WEIBO_URLS[i];
-            String apiName = i == 0 ? "官方API" : "备用API" + i;
+            String apiName = "备用API" + (i + 1);
             
             try {
                 logger.info("微博: 尝试{} - {}", apiName, backupUrl);
