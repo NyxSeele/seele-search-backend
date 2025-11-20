@@ -2,10 +2,10 @@ spring:
   application:
     name: hot-search-ai-platform
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:hot_search_ai}?useSSL=false&serverTimezone=UTC&characterEncoding=utf8&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://${DB_HOST:dbconn.sealoshzh.site}:${DB_PORT:47279}/${DB_NAME:hot_search_ai}?useSSL=false&serverTimezone=UTC&characterEncoding=utf8&allowPublicKeyRetrieval=true
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:dfy042005}
+    password: ${DB_PASSWORD:ngtcbtwd}
 
   jpa:
     hibernate:
@@ -18,9 +18,9 @@ spring:
   data:
     redis:
       database: 0
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:dfy042005}
+      host: ${REDIS_HOST:dbconn.sealoshzh.site}
+      port: ${REDIS_PORT:45190}
+      password: ${REDIS_PASSWORD:sctgr9hg}
       timeout: 5s
   cache:
     type: redis
@@ -39,10 +39,10 @@ hotsearch:
 
 dashscope:
   api:
-    key: ${DASHSCOPE_API_KEY:sk-f7e2cf5faa1a49fc9f4013e85f004744}
+    key: ${DASHSCOPE_API_KEY:}
     base-url: ${DASHSCOPE_API_BASE_URL:https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation}
-    model: ${DASHSCOPE_API_MODEL:qwen-turbo}  # 支持文本生成的快速模型
+    model: ${DASHSCOPE_API_MODEL:deepseek-v3.2-exp}  # 支持文本生成的快速模型
 
 logging:
   level:
-    org.xiaobuding.hotsearchaiplatform: INFO
+    org.xiaobuding.hotsearchaiplatform: DEBUG

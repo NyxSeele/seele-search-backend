@@ -11,7 +11,9 @@ import org.xiaobuding.hotsearchaiplatform.model.*;
 import org.xiaobuding.hotsearchaiplatform.service.*;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -20,15 +22,28 @@ public class AIServiceImpl implements AIService {
 
     private final AICoreService aiCoreService;
     private final HotSearchCollectorService hotSearchCollectorService;
+    private final SearchService searchService;
     private final DataValidationService dataValidationService;
+    private final WeatherService weatherService;
     private final ObjectMapper objectMapper;
+    private static final List<String> HOT_QUESTION_KEYWORDS = Arrays.asList(
+            "热搜", "热榜", "热点", "热度", "榜单", "排名", "舆论", "话题", "上榜", "趋势"
+    );
+    private static final Pattern WORD_SPLIT_PATTERN = Pattern.compile("[\\s,.;，。！？!?:：/\\\\]+");
+    private static final List<String> TIME_KEYWORDS = Arrays.asList("时间", "几点", "date", "time", "现在几号", "今天几号", "星期几", "周几");
+    private static final List<String> WEATHER_KEYWORDS = Arrays.asList("天气", "气温", "温度", "冷吗", "热吗", "下雨", "下雪");
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("MM-dd HH:mm");
 
     public AIServiceImpl(AICoreService aiCoreService,
                          HotSearchCollectorService hotSearchCollectorService,
-                         DataValidationService dataValidationService) {
+                         SearchService searchService,
+                         DataValidationService dataValidationService,
+                         WeatherService weatherService) {
         this.aiCoreService = aiCoreService;
         this.hotSearchCollectorService = hotSearchCollectorService;
+        this.searchService = searchService;
         this.dataValidationService = dataValidationService;
+        this.weatherService = weatherService;
         this.objectMapper = new ObjectMapper();
     }
 
@@ -126,28 +141,270 @@ public class AIServiceImpl implements AIService {
     public QNAResponse answerQuestion(String question, String conversationId, String platformFilter) {
         logger.info("Processing QNA: conversationId={}, question={}", conversationId, question);
         try {
-            List<HotSearchItem> relevantItems = collectRelevantItems(question, platformFilter);
-            
-            StringBuilder prompt = new StringBuilder();
-            prompt.append("你是一个专业的热搜数据分析助手。请根据以下热搜数据回答用户问题。\n\n");
-            prompt.append("用户问题：").append(question).append("\n\n相关热搜数据：\n");
-            relevantItems.stream().limit(10).forEach(item ->
-                    prompt.append("- ").append(item.getTitle()).append(" (").append(item.getPlatform()).append(")\n"));
-            prompt.append("\n回答要求：\n");
-            prompt.append("1. 必须分点回答，使用\\n分隔，每点以\"1. \"、\"2. \"、\"3. \"开头\n");
-            prompt.append("2. 每个要点要简洁明了，30-50字\n");
-            prompt.append("3. 共分为3-5个要点\n");
-            prompt.append("4. 不要使用一整段文字，必须分点列出\n");
-            prompt.append("\n请以JSON格式返回，包含'answer'字段。");
-            
-            String aiResponse = aiCoreService.callDashScopeAPI(prompt.toString());
-            QNAResponse response = parseQNAResponse(aiResponse, conversationId);
-            response.setStatus("SUCCESS");
-            return response;
+            if (isTimeQuestion(question)) {
+                return buildLocalTimeAnswer(conversationId);
+            }
+
+            if (isWeatherQuestion(question)) {
+                Optional<WeatherInfo> weatherInfo = weatherService.fetchWeather(extractCityFromQuestion(question).orElse(null));
+                if (weatherInfo.isPresent()) {
+                    return buildWeatherAnswer(conversationId, weatherInfo.get());
+                }
+            }
+
+            List<HotSearchItem> keywordMatches = findDatabaseMatches(question, platformFilter);
+            boolean looksLikeHotSearch = isHotSearchQuestion(question);
+
+            if (!keywordMatches.isEmpty()) {
+                return buildDatabaseAnswer(question, conversationId, keywordMatches);
+            }
+
+            if (looksLikeHotSearch) {
+                List<HotSearchItem> relevantItems = collectRelevantItems(question, platformFilter);
+                if (!relevantItems.isEmpty()) {
+                    return buildInsightAnswer(question, conversationId, relevantItems);
+                }
+            }
+
+            return buildWebSearchAnswer(question, conversationId);
         } catch (Exception e) {
             logger.error("QNA processing failed", e);
             return createFallbackQNAResponse(question, conversationId);
         }
+    }
+
+    private QNAResponse buildDatabaseAnswer(String question, String conversationId, List<HotSearchItem> matches) {
+        Comparator<HotSearchItem> byTime = Comparator.comparing(
+                HotSearchItem::getCapturedAt,
+                Comparator.nullsLast(Comparator.naturalOrder()));
+        Comparator<HotSearchItem> byRank = Comparator.comparing(
+                HotSearchItem::getRank,
+                Comparator.nullsLast(Comparator.naturalOrder()));
+
+        List<HotSearchItem> topItems = matches.stream()
+                .sorted(byTime.reversed().thenComparing(byRank))
+                .limit(5)
+                .collect(Collectors.toList());
+
+        QNAResponse response = new QNAResponse();
+        response.setConversationId(conversationId);
+        response.setAnswer(formatDataDrivenAnswer(question, topItems));
+        response.setStatus("DATA_MATCH");
+        response.setRelatedHotSearches(convertRelatedItems(topItems));
+        return response;
+    }
+
+    private QNAResponse buildInsightAnswer(String question, String conversationId, List<HotSearchItem> relevantItems) {
+        try {
+            StringBuilder prompt = new StringBuilder();
+            prompt.append("你是一个专业的热搜分析师。请结合下面的热搜数据，用中文回答用户的问题。\n");
+            prompt.append("用户问题：").append(question).append("\n\n");
+            prompt.append("相关热搜（仅供参考，请确保回答建立在这些数据上）：\n");
+            relevantItems.stream().limit(12).forEach(item -> prompt
+                    .append("- 平台: ").append(item.getPlatform())
+                    .append("，标题: ").append(item.getTitle())
+                    .append("，热度: ").append(formatHeat(item.getHeat()))
+                    .append("，分类: ").append(Optional.ofNullable(item.getCategory()).orElse("未分类"))
+                    .append("\n"));
+            prompt.append("\n回答要求：\n");
+            prompt.append("1. 先用一句话概括整体态势；\n");
+            prompt.append("2. 然后用分点形式给出2-4条关键判断；\n");
+            prompt.append("3. 每条判断控制在25-40字；\n");
+            prompt.append("4. 如果数据不足，请直说而不是编造；\n");
+            prompt.append("5. 输出格式必须是 JSON 对象：{\"answer\": \"...\"}，不要包含 markdown 或额外字段。\n");
+
+            String aiResponse = aiCoreService.callDashScopeAPI(prompt.toString());
+            QNAResponse response = parseQNAResponse(aiResponse, conversationId);
+            response.setStatus("AI_HOTSEARCH");
+            response.setRelatedHotSearches(convertRelatedItems(relevantItems.stream().limit(5).collect(Collectors.toList())));
+            return response;
+        } catch (Exception e) {
+            logger.warn("AI insight generation failed, fallback to database answer", e);
+            return buildDatabaseAnswer(question, conversationId, relevantItems);
+        }
+    }
+
+    private QNAResponse buildWebSearchAnswer(String question, String conversationId) {
+        try {
+            StringBuilder prompt = new StringBuilder();
+            prompt.append("你是一个实时联网的中文助手。你可以访问最新的互联网搜索结果。");
+            prompt.append("请严格按照下面格式输出：\n");
+            prompt.append("{\"answer\":\"(用一到两段中文直接回答，禁止出现markdown、列表、星号或额外字段)\"}\n");
+            prompt.append("要求：\n");
+            prompt.append("1. 首句给出明确结论；\n");
+            prompt.append("2. 若引用事实，可在句末用括号标注来源网站名；\n");
+            prompt.append("3. 若搜索无结果，请写“未检索到相关信息”；\n");
+            prompt.append("4. 严禁出现中文冒号或“answer：”这类前缀，必须保持 JSON 键为英文冒号。\n");
+            prompt.append("用户问题：").append(question).append("\n");
+
+            String aiResponse = aiCoreService.callDashScopeAPI(prompt.toString(), question);
+            QNAResponse response = parseQNAResponse(aiResponse, conversationId);
+            response.setStatus("WEB_SEARCH");
+            response.setRelatedHotSearches(Collections.emptyList());
+            return response;
+        } catch (Exception e) {
+            logger.error("Web search assistant failed", e);
+            return createFallbackQNAResponse(question, conversationId);
+        }
+    }
+
+    private boolean isTimeQuestion(String question) {
+        if (question == null) return false;
+        String normalized = question.toLowerCase(Locale.ROOT);
+        return TIME_KEYWORDS.stream().anyMatch(keyword -> normalized.contains(keyword.toLowerCase(Locale.ROOT)));
+    }
+
+    private QNAResponse buildLocalTimeAnswer(String conversationId) {
+        LocalDateTime now = LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai"));
+        String formatted = now.format(DateTimeFormatter.ofPattern("yyyy年M月d日 HH:mm:ss"));
+        String weekday = now.getDayOfWeek().getDisplayName(java.time.format.TextStyle.FULL, Locale.CHINA);
+        QNAResponse response = new QNAResponse();
+        response.setConversationId(conversationId);
+        response.setAnswer("当前北京时间为 " + formatted + "，" + weekday + "。");
+        response.setStatus("LOCAL_TIME");
+        response.setRelatedHotSearches(Collections.emptyList());
+        return response;
+    }
+
+    private boolean isWeatherQuestion(String question) {
+        if (question == null) return false;
+        String normalized = question.toLowerCase(Locale.ROOT);
+        return WEATHER_KEYWORDS.stream().anyMatch(keyword -> normalized.contains(keyword.toLowerCase(Locale.ROOT)));
+    }
+
+    private Optional<String> extractCityFromQuestion(String question) {
+        if (question == null) return Optional.empty();
+        String trimmed = question.replaceAll("[?？]", "");
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("([\\u4e00-\\u9fa5A-Za-z]+?)(的)?(天气|气温|温度)").matcher(trimmed);
+        if (matcher.find()) {
+            return Optional.ofNullable(matcher.group(1));
+        }
+        return Optional.empty();
+    }
+
+    private QNAResponse buildWeatherAnswer(String conversationId, WeatherInfo weatherInfo) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(weatherInfo.getCityName()).append("当前天气：");
+        if (weatherInfo.getDescription() != null) {
+            builder.append(weatherInfo.getDescription()).append("，");
+        }
+        if (weatherInfo.getTemperature() != null && !weatherInfo.getTemperature().isNaN()) {
+            builder.append("气温约").append(String.format(Locale.CHINA, "%.1f", weatherInfo.getTemperature())).append("℃，");
+        }
+        if (weatherInfo.getHumidity() != null && !weatherInfo.getHumidity().isNaN()) {
+            builder.append("相对湿度").append(String.format(Locale.CHINA, "%.0f", weatherInfo.getHumidity())).append("%，");
+        }
+        builder.append("数据来源：Open-Meteo。");
+
+        QNAResponse response = new QNAResponse();
+        response.setConversationId(conversationId);
+        response.setAnswer(builder.toString().replaceAll("，$", ""));
+        response.setStatus("LOCAL_WEATHER");
+        response.setRelatedHotSearches(Collections.emptyList());
+        return response;
+    }
+
+    private boolean isHotSearchQuestion(String question) {
+        if (question == null) {
+            return false;
+        }
+        String normalized = question.toLowerCase(Locale.ROOT);
+        return HOT_QUESTION_KEYWORDS.stream().anyMatch(keyword -> normalized.contains(keyword));
+    }
+
+    private List<HotSearchItem> findDatabaseMatches(String question, String platformFilter) {
+        if (question == null || question.isBlank()) {
+            return Collections.emptyList();
+        }
+
+        Set<Long> seenIds = new LinkedHashSet<>();
+        List<HotSearchItem> matches = new ArrayList<>();
+        List<String> keywords = extractKeywords(question);
+        if (keywords.isEmpty()) {
+            keywords = Collections.singletonList(question.trim());
+        }
+
+        PlatformType platform = null;
+        if (platformFilter != null && !platformFilter.isBlank()) {
+            try {
+                platform = PlatformType.valueOf(platformFilter.toUpperCase());
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+
+        for (String keyword : keywords) {
+            if (keyword.length() < 2) {
+                continue;
+            }
+            List<HotSearchItem> found = searchService.searchByKeyword(keyword);
+            for (HotSearchItem item : found) {
+                if (platform != null && item.getPlatform() != platform) {
+                    continue;
+                }
+                if (item.getId() == null || !seenIds.add(item.getId())) {
+                    continue;
+                }
+                matches.add(item);
+            }
+            if (matches.size() >= 8) {
+                break;
+            }
+        }
+        return matches;
+    }
+
+    private List<String> extractKeywords(String text) {
+        if (text == null) {
+            return Collections.emptyList();
+        }
+        return Arrays.stream(WORD_SPLIT_PATTERN.split(text))
+                .map(String::trim)
+                .filter(token -> token.length() >= 2)
+                .limit(6)
+                .collect(Collectors.toList());
+    }
+
+    private List<QNAResponse.RelatedHotSearch> convertRelatedItems(List<HotSearchItem> items) {
+        return items.stream().map(item -> {
+            QNAResponse.RelatedHotSearch related = new QNAResponse.RelatedHotSearch();
+            related.setId(item.getId());
+            related.setTitle(item.getTitle());
+            related.setPlatform(item.getPlatform() != null ? item.getPlatform().name() : null);
+            related.setHeat(item.getHeat());
+            related.setRank(item.getRank());
+            related.setCategory(item.getCategory());
+            related.setUrl(item.getUrl());
+            return related;
+        }).collect(Collectors.toList());
+    }
+
+    private String formatDataDrivenAnswer(String question, List<HotSearchItem> items) {
+        if (items.isEmpty()) {
+            return "暂未在数据库中找到与「" + question + "」直接匹配的热搜记录。";
+        }
+
+        StringBuilder builder = new StringBuilder();
+        builder.append("根据数据库记录，「").append(question).append("」相关的热搜如下：\n");
+        for (int i = 0; i < items.size(); i++) {
+            HotSearchItem item = items.get(i);
+            builder.append(i + 1).append(". ")
+                    .append(getPlatformName(item.getPlatform()))
+                    .append(" · ").append(Optional.ofNullable(item.getCategory()).orElse("未分类"))
+                    .append(" · ").append(item.getTitle());
+            if (item.getHeat() != null) {
+                builder.append("（热度 ").append(formatHeat(item.getHeat())).append("）");
+            }
+            builder.append("\n");
+        }
+        LocalDateTime latestTime = items.stream()
+                .map(HotSearchItem::getCapturedAt)
+                .filter(Objects::nonNull)
+                .max(LocalDateTime::compareTo)
+                .orElse(null);
+        if (latestTime != null) {
+            builder.append("数据更新：").append(latestTime.format(TIME_FORMATTER));
+        }
+        return builder.toString().trim();
     }
 
     private TrendSummary parseGlobalTrendResponse(String aiResponse) {
@@ -193,17 +450,44 @@ public class AIServiceImpl implements AIService {
     }
 
     private QNAResponse parseQNAResponse(String aiResponse, String conversationId) {
-        try {
-            String cleaned = cleanJsonResponse(aiResponse);
-            JsonNode root = objectMapper.readTree(cleaned);
-            
-            QNAResponse response = new QNAResponse();
-            response.setConversationId(conversationId);
-            response.setAnswer(root.path("answer").asText("Unable to generate answer"));
+        QNAResponse response = new QNAResponse();
+        response.setConversationId(conversationId);
+
+        if (aiResponse == null || aiResponse.trim().isEmpty()) {
+            response.setAnswer("AI service temporarily unavailable, please try again later.");
+            response.setStatus("EMPTY_RESPONSE");
             return response;
-        } catch (Exception e) {
-            return createFallbackQNAResponse("", conversationId);
         }
+
+        logger.debug("Raw AI response: {}", aiResponse);
+        String cleaned = cleanJsonResponse(aiResponse);
+
+        // Attempt direct JSON parsing first
+        try {
+            JsonNode root = objectMapper.readTree(cleaned);
+            response.setAnswer(root.path("answer").asText("Unable to generate answer"));
+            response.setStatus("STRUCTURED");
+            return response;
+        } catch (Exception ignored) {
+            // Fallback if cleaned text is still not JSON
+        }
+
+        // Try to normalize patterns like "answer：xxx" or "答复: xxx"
+        String normalized = cleaned;
+        normalized = normalized
+                .replaceAll("(?i)answer\\s*[:：]", "")
+                .replaceAll("(?i)答复\\s*[:：]", "")
+                .trim();
+
+        if (!normalized.isEmpty()) {
+            response.setAnswer(normalized);
+            response.setStatus("RAW_TEXT");
+            return response;
+        }
+
+        response.setAnswer("AI service temporarily unavailable, please try again later.");
+        response.setStatus("EMPTY_RESPONSE");
+        return response;
     }
 
     private String cleanJsonResponse(String raw) {
@@ -258,6 +542,7 @@ public class AIServiceImpl implements AIService {
         response.setConversationId(conversationId);
         response.setAnswer("AI service temporarily unavailable, please try again later.");
         response.setStatus("FALLBACK");
+        response.setRelatedHotSearches(Collections.emptyList());
         return response;
     }
 

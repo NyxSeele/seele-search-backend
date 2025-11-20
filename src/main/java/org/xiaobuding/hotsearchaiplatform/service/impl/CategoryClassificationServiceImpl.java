@@ -31,6 +31,17 @@ public class CategoryClassificationServiceImpl implements CategoryClassification
         "(文化|历史|文史|考古|文物|古迹|博物馆|展览|展陈|文旅|古诗|诗词|汉服|国风|书法|国学|戏曲|京剧|昆曲|文艺|作家|文学奖|出版|读书|古籍|遗址|碑刻|非遗|文创|艺术节|文化节|文博会|故宫|敦煌|长城|文庙|书展|碑林|展演|演出|舞台|音乐节|演唱会|话剧|舞蹈|国粹|民俗|传统服饰|民乐|民谣|艺术展|设计展|画展|雕塑展|国潮|国风音乐|汉元素)"
     );
 
+    private static final Set<String> MILITARY_RELAXED_KEYWORDS = new HashSet<>(Arrays.asList(
+        "航天", "火箭", "卫星", "探月", "嫦娥", "神舟", "东风", "长剑", "长征", "导弹试射", "战局", "战况",
+        "前线", "冲突升级", "战士", "军嫂", "军礼", "火炮", "无人机", "防务", "国防科技", "太空军", "指挥部", "边防"
+    ));
+
+    private static final Set<String> CULTURE_RELAXED_KEYWORDS = new HashSet<>(Arrays.asList(
+        "非遗", "国风", "古装", "宫廷", "考古", "壁画", "碑刻", "乐器", "古琴", "文创", "国潮", "古典", "古诗词",
+        "汉字", "书院", "国粹", "园林", "茶文化", "香文化", "花朝节", "庙会", "市集", "古城", "古镇", "古堡", "古风摄影",
+        "唐装", "宋服", "雅集", "文戏", "文旅局", "博览会"
+    ));
+
     static {
         // 严格按照前端定义的8个分类配置关键词
         // 优先级从高到低排列，避免误判
@@ -253,9 +264,12 @@ public class CategoryClassificationServiceImpl implements CategoryClassification
         }
 
         // 4. 如果没有匹配到任何关键词，使用严格的智能推断
-        if (category == null || maxScore < 1.0) {
+        if (category == null || maxScore < 0.8) {
             // 根据标题特征进行严格推断
-            if (cultureCueDetected) {
+            if (matchesRelaxedMilitaryKeyword(title)) {
+                category = "military";
+                logger.debug("Relaxed military rule applied for '{}'", title);
+            } else if (cultureCueDetected || matchesRelaxedCultureKeyword(title)) {
                 category = "culture";
                 logger.debug("Relaxed culture rule applied for '{}'", title);
             } else if (title.matches(".*[0-9]+.*") && title.length() < 15) {
@@ -295,5 +309,23 @@ public class CategoryClassificationServiceImpl implements CategoryClassification
 
     private boolean hasRelaxedCultureCue(String title) {
         return CULTURE_RELAXED_PATTERN.matcher(title).find();
+    }
+
+    private boolean matchesRelaxedMilitaryKeyword(String title) {
+        for (String keyword : MILITARY_RELAXED_KEYWORDS) {
+            if (title.contains(keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean matchesRelaxedCultureKeyword(String title) {
+        for (String keyword : CULTURE_RELAXED_KEYWORDS) {
+            if (title.contains(keyword)) {
+                return true;
+            }
+        }
+        return false;
     }
 }
