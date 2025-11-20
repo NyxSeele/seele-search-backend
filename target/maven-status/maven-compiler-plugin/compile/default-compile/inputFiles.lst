@@ -50,9 +50,16 @@ D:\Xiaobuding\Xiaobuding\hot-search-ai\hot-search-ai-platform\src\main\java\org\
 D:\Xiaobuding\Xiaobuding\hot-search-ai\hot-search-ai-platform\src\main\java\org\xiaobuding\hotsearchaiplatform\service\impl\HotSearchCollectorServiceImpl.java
 D:\Xiaobuding\Xiaobuding\hot-search-ai\hot-search-ai-platform\src\main\java\org\xiaobuding\hotsearchaiplatform\service\impl\HotSearchServiceImpl.java
 D:\Xiaobuding\Xiaobuding\hot-search-ai\hot-search-ai-platform\src\main\java\org\xiaobuding\hotsearchaiplatform\service\impl\SearchServiceImpl.java
+D:\Xiaobuding\Xiaobuding\hot-search-ai\hot-search-ai-platform\src\main\java\org\xiaobuding\hotsearchaiplatform\service\platform\BilibiliHotSearchService.java
+D:\Xiaobuding\Xiaobuding\hot-search-ai\hot-search-ai-platform\src\main\java\org\xiaobuding\hotsearchaiplatform\service\platform\DouyinHotSearchService.java
 D:\Xiaobuding\Xiaobuding\hot-search-ai\hot-search-ai-platform\src\main\java\org\xiaobuding\hotsearchaiplatform\service\platform\ThirdPartyHotSearchService.java
+D:\Xiaobuding\Xiaobuding\hot-search-ai\hot-search-ai-platform\src\main\java\org\xiaobuding\hotsearchaiplatform\service\platform\ToutiaoHotSearchService.java
+D:\Xiaobuding\Xiaobuding\hot-search-ai\hot-search-ai-platform\src\main\java\org\xiaobuding\hotsearchaiplatform\service\platform\WeiboHotSearchService.java
 D:\Xiaobuding\Xiaobuding\hot-search-ai\hot-search-ai-platform\src\main\java\org\xiaobuding\hotsearchaiplatform\service\PlatformHealthService.java
 D:\Xiaobuding\Xiaobuding\hot-search-ai\hot-search-ai-platform\src\main\java\org\xiaobuding\hotsearchaiplatform\service\SearchService.java
+D:\Xiaobuding\Xiaobuding\hot-search-ai\hot-search-ai-platform\src\main\java\org\xiaobuding\hotsearchaiplatform\service\task\ApplicationStartupTask.java
+D:\Xiaobuding\Xiaobuding\hot-search-ai\hot-search-ai-platform\src\main\java\org\xiaobuding\hotsearchaiplatform\service\task\DatabaseCleanupTask.java
 D:\Xiaobuding\Xiaobuding\hot-search-ai\hot-search-ai-platform\src\main\java\org\xiaobuding\hotsearchaiplatform\service\task\HotSearchCacheWarmupTask.java
 D:\Xiaobuding\Xiaobuding\hot-search-ai\hot-search-ai-platform\src\main\java\org\xiaobuding\hotsearchaiplatform\util\DataDeduplicationUtil.java
+D:\Xiaobuding\Xiaobuding\hot-search-ai\hot-search-ai-platform\src\main\java\org\xiaobuding\hotsearchaiplatform\util\HtmlDebugger.java
 D:\Xiaobuding\Xiaobuding\hot-search-ai\hot-search-ai-platform\src\main\java\org\xiaobuding\hotsearchaiplatform\util\InputValidator.java

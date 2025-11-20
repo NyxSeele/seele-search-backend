@@ -53,7 +53,6 @@ org\xiaobuding\hotsearchaiplatform\model\TrendSummary$TopItem.class
 org\xiaobuding\hotsearchaiplatform\model\PlatformType.class
 org\xiaobuding\hotsearchaiplatform\service\HotSearchService.class
 org\xiaobuding\hotsearchaiplatform\config\RateLimitConfig.class
-org\xiaobuding\hotsearchaiplatform\service\platform\ThirdPartyHotSearchService$1.class
 org\xiaobuding\hotsearchaiplatform\service\impl\CategoryClassificationServiceImpl.class
 org\xiaobuding\hotsearchaiplatform\service\PlatformHealthService$PlatformHealth.class
 org\xiaobuding\hotsearchaiplatform\exception\GlobalExceptionHandler.class
@@ -64,7 +63,6 @@ org\xiaobuding\hotsearchaiplatform\service\impl\HotSearchCacheServiceImpl.class
 org\xiaobuding\hotsearchaiplatform\config\RedisConfig.class
 org\xiaobuding\hotsearchaiplatform\model\TrendSummary$DataStatus.class
 org\xiaobuding\hotsearchaiplatform\service\CategoryClassificationService.class
-org\xiaobuding\hotsearchaiplatform\service\impl\AIServiceImpl.class
 org\xiaobuding\hotsearchaiplatform\service\DataValidationService.class
 org\xiaobuding\hotsearchaiplatform\config\RestClientConfig.class
 org\xiaobuding\hotsearchaiplatform\model\EvaluationResult.class

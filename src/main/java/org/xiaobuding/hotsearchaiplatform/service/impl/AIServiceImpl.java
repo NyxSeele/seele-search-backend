@@ -8,7 +8,11 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.xiaobuding.hotsearchaiplatform.exception.*;
 import org.xiaobuding.hotsearchaiplatform.model.*;
-import org.xiaobuding.hotsearchaiplatform.service.*;
+import org.xiaobuding.hotsearchaiplatform.service.AICoreService;
+import org.xiaobuding.hotsearchaiplatform.service.AIService;
+import org.xiaobuding.hotsearchaiplatform.service.DataValidationService;
+import org.xiaobuding.hotsearchaiplatform.service.HotSearchCollectorService;
+import org.xiaobuding.hotsearchaiplatform.service.SearchService;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -24,26 +28,22 @@ public class AIServiceImpl implements AIService {
     private final HotSearchCollectorService hotSearchCollectorService;
     private final SearchService searchService;
     private final DataValidationService dataValidationService;
-    private final WeatherService weatherService;
     private final ObjectMapper objectMapper;
     private static final List<String> HOT_QUESTION_KEYWORDS = Arrays.asList(
             "热搜", "热榜", "热点", "热度", "榜单", "排名", "舆论", "话题", "上榜", "趋势"
     );
     private static final Pattern WORD_SPLIT_PATTERN = Pattern.compile("[\\s,.;，。！？!?:：/\\\\]+");
     private static final List<String> TIME_KEYWORDS = Arrays.asList("时间", "几点", "date", "time", "现在几号", "今天几号", "星期几", "周几");
-    private static final List<String> WEATHER_KEYWORDS = Arrays.asList("天气", "气温", "温度", "冷吗", "热吗", "下雨", "下雪");
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("MM-dd HH:mm");
 
     public AIServiceImpl(AICoreService aiCoreService,
                          HotSearchCollectorService hotSearchCollectorService,
                          SearchService searchService,
-                         DataValidationService dataValidationService,
-                         WeatherService weatherService) {
+                         DataValidationService dataValidationService) {
         this.aiCoreService = aiCoreService;
         this.hotSearchCollectorService = hotSearchCollectorService;
         this.searchService = searchService;
         this.dataValidationService = dataValidationService;
-        this.weatherService = weatherService;
         this.objectMapper = new ObjectMapper();
     }
 
@@ -143,13 +143,6 @@ public class AIServiceImpl implements AIService {
         try {
             if (isTimeQuestion(question)) {
                 return buildLocalTimeAnswer(conversationId);
-            }
-
-            if (isWeatherQuestion(question)) {
-                Optional<WeatherInfo> weatherInfo = weatherService.fetchWeather(extractCityFromQuestion(question).orElse(null));
-                if (weatherInfo.isPresent()) {
-                    return buildWeatherAnswer(conversationId, weatherInfo.get());
-                }
             }
 
             List<HotSearchItem> keywordMatches = findDatabaseMatches(question, platformFilter);
@@ -262,44 +255,6 @@ public class AIServiceImpl implements AIService {
         response.setConversationId(conversationId);
         response.setAnswer("当前北京时间为 " + formatted + "，" + weekday + "。");
         response.setStatus("LOCAL_TIME");
-        response.setRelatedHotSearches(Collections.emptyList());
-        return response;
-    }
-
-    private boolean isWeatherQuestion(String question) {
-        if (question == null) return false;
-        String normalized = question.toLowerCase(Locale.ROOT);
-        return WEATHER_KEYWORDS.stream().anyMatch(keyword -> normalized.contains(keyword.toLowerCase(Locale.ROOT)));
-    }
-
-    private Optional<String> extractCityFromQuestion(String question) {
-        if (question == null) return Optional.empty();
-        String trimmed = question.replaceAll("[?？]", "");
-        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("([\\u4e00-\\u9fa5A-Za-z]+?)(的)?(天气|气温|温度)").matcher(trimmed);
-        if (matcher.find()) {
-            return Optional.ofNullable(matcher.group(1));
-        }
-        return Optional.empty();
-    }
-
-    private QNAResponse buildWeatherAnswer(String conversationId, WeatherInfo weatherInfo) {
-        StringBuilder builder = new StringBuilder();
-        builder.append(weatherInfo.getCityName()).append("当前天气：");
-        if (weatherInfo.getDescription() != null) {
-            builder.append(weatherInfo.getDescription()).append("，");
-        }
-        if (weatherInfo.getTemperature() != null && !weatherInfo.getTemperature().isNaN()) {
-            builder.append("气温约").append(String.format(Locale.CHINA, "%.1f", weatherInfo.getTemperature())).append("℃，");
-        }
-        if (weatherInfo.getHumidity() != null && !weatherInfo.getHumidity().isNaN()) {
-            builder.append("相对湿度").append(String.format(Locale.CHINA, "%.0f", weatherInfo.getHumidity())).append("%，");
-        }
-        builder.append("数据来源：Open-Meteo。");
-
-        QNAResponse response = new QNAResponse();
-        response.setConversationId(conversationId);
-        response.setAnswer(builder.toString().replaceAll("，$", ""));
-        response.setStatus("LOCAL_WEATHER");
         response.setRelatedHotSearches(Collections.emptyList());
         return response;
     }
