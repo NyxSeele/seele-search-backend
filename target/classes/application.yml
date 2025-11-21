@@ -2,10 +2,10 @@ spring:
   application:
     name: hot-search-ai-platform
   datasource:
-    url: jdbc:mysql://${DB_HOST:dbconn.sealoshzh.site}:${DB_PORT:47279}/${DB_NAME:hot_search_ai}?useSSL=false&serverTimezone=UTC&characterEncoding=utf8&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:hot_search_ai}?useSSL=false&serverTimezone=UTC&characterEncoding=utf8&allowPublicKeyRetrieval=true
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:ngtcbtwd}
+    password: ${DB_PASSWORD:dfy042005}
 
   jpa:
     hibernate:
@@ -18,9 +18,9 @@ spring:
   data:
     redis:
       database: 0
-      host: ${REDIS_HOST:dbconn.sealoshzh.site}
-      port: ${REDIS_PORT:45190}
-      password: ${REDIS_PASSWORD:sctgr9hg}
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:dfy042005}
       timeout: 5s
   cache:
     type: redis

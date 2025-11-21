@@ -34,7 +34,7 @@ public class AIServiceImpl implements AIService {
     );
     private static final Pattern WORD_SPLIT_PATTERN = Pattern.compile("[\\s,.;，。！？!?:：/\\\\]+");
     private static final List<String> TIME_KEYWORDS = Arrays.asList("时间", "几点", "date", "time", "现在几号", "今天几号", "星期几", "周几");
-    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("MM-dd HH:mm");
+    private static final List<String> WEB_SEARCH_EMPTY_HINTS = Arrays.asList("未检索到相关信息", "暂无相关结果", "无法从联网结果");
 
     public AIServiceImpl(AICoreService aiCoreService,
                          HotSearchCollectorService hotSearchCollectorService,
@@ -145,11 +145,16 @@ public class AIServiceImpl implements AIService {
                 return buildLocalTimeAnswer(conversationId);
             }
 
+            QNAResponse webResponse = attemptWebSearch(question, conversationId);
+            if (webResponse != null) {
+                return webResponse;
+            }
+
             List<HotSearchItem> keywordMatches = findDatabaseMatches(question, platformFilter);
             boolean looksLikeHotSearch = isHotSearchQuestion(question);
 
             if (!keywordMatches.isEmpty()) {
-                return buildDatabaseAnswer(question, conversationId, keywordMatches);
+                return buildInsightAnswer(question, conversationId, keywordMatches);
             }
 
             if (looksLikeHotSearch) {
@@ -159,7 +164,7 @@ public class AIServiceImpl implements AIService {
                 }
             }
 
-            return buildWebSearchAnswer(question, conversationId);
+            return createFallbackQNAResponse(question, conversationId);
         } catch (Exception e) {
             logger.error("QNA processing failed", e);
             return createFallbackQNAResponse(question, conversationId);
@@ -217,28 +222,23 @@ public class AIServiceImpl implements AIService {
         }
     }
 
-    private QNAResponse buildWebSearchAnswer(String question, String conversationId) {
-        try {
-            StringBuilder prompt = new StringBuilder();
-            prompt.append("你是一个实时联网的中文助手。你可以访问最新的互联网搜索结果。");
-            prompt.append("请严格按照下面格式输出：\n");
-            prompt.append("{\"answer\":\"(用一到两段中文直接回答，禁止出现markdown、列表、星号或额外字段)\"}\n");
-            prompt.append("要求：\n");
-            prompt.append("1. 首句给出明确结论；\n");
-            prompt.append("2. 若引用事实，可在句末用括号标注来源网站名；\n");
-            prompt.append("3. 若搜索无结果，请写“未检索到相关信息”；\n");
-            prompt.append("4. 严禁出现中文冒号或“answer：”这类前缀，必须保持 JSON 键为英文冒号。\n");
-            prompt.append("用户问题：").append(question).append("\n");
+    private QNAResponse buildWebSearchAnswer(String question, String conversationId) throws Exception {
+        StringBuilder prompt = new StringBuilder();
+        prompt.append("你是一个实时联网的中文助手。你可以访问最新的互联网搜索结果。");
+        prompt.append("请严格按照下面格式输出：\n");
+        prompt.append("{\"answer\":\"(用一到两段中文直接回答，禁止出现markdown、列表、星号或额外字段)\"}\n");
+        prompt.append("要求：\n");
+        prompt.append("1. 首句给出明确结论；\n");
+        prompt.append("2. 若引用事实，可在句末用括号标注来源网站名；\n");
+        prompt.append("3. 若搜索无结果，请写“未检索到相关信息”；\n");
+        prompt.append("4. 严禁出现中文冒号或“answer：”这类前缀，必须保持 JSON 键为英文冒号。\n");
+        prompt.append("用户问题：").append(question).append("\n");
 
-            String aiResponse = aiCoreService.callDashScopeAPI(prompt.toString(), question);
-            QNAResponse response = parseQNAResponse(aiResponse, conversationId);
-            response.setStatus("WEB_SEARCH");
-            response.setRelatedHotSearches(Collections.emptyList());
-            return response;
-        } catch (Exception e) {
-            logger.error("Web search assistant failed", e);
-            return createFallbackQNAResponse(question, conversationId);
-        }
+        String aiResponse = aiCoreService.callDashScopeAPI(prompt.toString(), question);
+        QNAResponse response = parseQNAResponse(aiResponse, conversationId);
+        response.setStatus("WEB_SEARCH");
+        response.setRelatedHotSearches(Collections.emptyList());
+        return response;
     }
 
     private boolean isTimeQuestion(String question) {
@@ -344,22 +344,31 @@ public class AIServiceImpl implements AIService {
             HotSearchItem item = items.get(i);
             builder.append(i + 1).append(". ")
                     .append(getPlatformName(item.getPlatform()))
-                    .append(" · ").append(Optional.ofNullable(item.getCategory()).orElse("未分类"))
-                    .append(" · ").append(item.getTitle());
-            if (item.getHeat() != null) {
-                builder.append("（热度 ").append(formatHeat(item.getHeat())).append("）");
-            }
-            builder.append("\n");
-        }
-        LocalDateTime latestTime = items.stream()
-                .map(HotSearchItem::getCapturedAt)
-                .filter(Objects::nonNull)
-                .max(LocalDateTime::compareTo)
-                .orElse(null);
-        if (latestTime != null) {
-            builder.append("数据更新：").append(latestTime.format(TIME_FORMATTER));
+                    .append(" · ").append(item.getTitle())
+                    .append("\n");
         }
         return builder.toString().trim();
+    }
+
+    private QNAResponse attemptWebSearch(String question, String conversationId) {
+        try {
+            QNAResponse response = buildWebSearchAnswer(question, conversationId);
+            if (isWebAnswerInformative(response.getAnswer())) {
+                return response;
+            }
+            logger.info("Web search returned insufficient info, fallback to database for question: {}", question);
+        } catch (Exception e) {
+            logger.warn("Web search failed, fallback to database: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    private boolean isWebAnswerInformative(String answer) {
+        if (answer == null || answer.isBlank()) {
+            return false;
+        }
+        String normalized = answer.trim();
+        return WEB_SEARCH_EMPTY_HINTS.stream().noneMatch(normalized::contains);
     }
 
     private TrendSummary parseGlobalTrendResponse(String aiResponse) {

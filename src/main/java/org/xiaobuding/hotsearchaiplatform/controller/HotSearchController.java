@@ -20,15 +20,18 @@ public class HotSearchController {
     private final HotSearchRepository hotSearchRepository;
     private final CategoryClassificationService categoryClassificationService;
     private final ClassificationStatusService classificationStatusService;
+    private final org.xiaobuding.hotsearchaiplatform.service.platform.HonkaiHotSearchService honkaiService;
     public HotSearchController(HotSearchService hotSearchService, HotSearchCacheService cacheService,
                                HotSearchRepository hotSearchRepository,
                                CategoryClassificationService categoryClassificationService,
-                               ClassificationStatusService classificationStatusService) {
+                               ClassificationStatusService classificationStatusService,
+                               org.xiaobuding.hotsearchaiplatform.service.platform.HonkaiHotSearchService honkaiService) {
         this.hotSearchService = hotSearchService;
         this.cacheService = cacheService;
         this.hotSearchRepository = hotSearchRepository;
         this.categoryClassificationService = categoryClassificationService;
         this.classificationStatusService = classificationStatusService;
+        this.honkaiService = honkaiService;
     }
     @GetMapping("/last-update")
     public ResponseEntity<ApiResponse<LastUpdateInfo>> getLastUpdateTime() {
@@ -201,6 +204,24 @@ public class HotSearchController {
         logger.warn("Failed to get data, returning empty list");
         return new ArrayList<>();
     }
+
+    @GetMapping("/honkai")
+    public ResponseEntity<List<HotSearchItem>> getHonkaiHotSearches() {
+        try {
+            logger.info("Get Honkai hot search list");
+            List<HotSearchItem> items = honkaiService.fetchHotSearch();
+            if (items == null) {
+                items = new ArrayList<>();
+            }
+            HttpHeaders headers = new HttpHeaders();
+            headers.add("X-Cache-Control", "max-age=300");
+            return ResponseEntity.ok().headers(headers).body(items);
+        } catch (Exception ex) {
+            logger.error("Get Honkai hot search data exception", ex);
+            return ResponseEntity.status(500).build();
+        }
+    }
+    
     private List<HotSearchItem> getHotSearchWithFallback(PlatformType platformType) {
         // 1. 先查Redis缓存
         List<HotSearchItem> cached = cacheService.getPlatformCached(platformType);

@@ -25,16 +25,13 @@ import java.util.regex.Pattern;
 @Service
 public class WeiboHotSearchService {
     private static final Logger logger = LoggerFactory.getLogger(WeiboHotSearchService.class);
-    // 主API（API1）
-    private static final String WEIBO_URL = "https://mini.itunes123.com/node/3jMB6le6MM/";
+    // 主API（API1）- 使用用户指定的URL
+    private static final String WEIBO_URL = "https://mini.itunes123.com/c/J7jYiuVjrR/";
     // 备用API（API2 ~ API4），优先级从高到低
-    // API2: rebang.today
-    // API3: tophub.today
-    // API4: 36jxs.com
     private static final String[] BACKUP_WEIBO_URLS = {
         "https://rebang.today/?tab=weibo",          // 备用API2
-        "https://tophub.today/n/KqndgxeL19",        // 备用API3
-        "https://www.36jxs.com/hot/5.html"          // 备用API4
+        "https://www.entobit.cn/hot-search/desktop", // 备用API3
+        "https://www.weibotop.cn/2.0/"              // 备用API4
     };
     
     public List<HotSearchItem> fetchHotSearch() {
@@ -208,6 +205,11 @@ public class WeiboHotSearchService {
                 .ignoreHttpErrors(true)
                 .get();
         
+        // 针对weibotop.cn，需要找到"微博热搜榜"区域
+        if (url.contains("weibotop.cn")) {
+            return fetchFromWeibotop(doc, apiName);
+        }
+        
         // 尝试多个选择器
         Elements listItems = doc.select("tbody tr");  // 官方API表格结构
         logger.info("微博{}: 选择器'tbody tr'找到 {} 个元素", apiName, listItems.size());
@@ -242,6 +244,135 @@ public class WeiboHotSearchService {
             long heat = parseHeat(heatStr);
             
             String itemUrl = generateUrl(title);
+            
+            HotSearchItem hotItem = new HotSearchItem();
+            hotItem.setPlatform(PlatformType.WEIBO);
+            hotItem.setTitle(title);
+            hotItem.setHeat(heat);
+            hotItem.setRank(rank);
+            hotItem.setUrl(itemUrl);
+            hotItem.setCapturedAt(LocalDateTime.now());
+            hotItem.setCategory("pending");
+            items.add(hotItem);
+            
+            if (rank <= 3) {
+                logger.debug("微博{} rank {}: title='{}', heat={}", apiName, rank, title, heat);
+            }
+            rank++;
+        }
+        
+        return items;
+    }
+    
+    /**
+     * 从weibotop.cn爬取 - 只解析微博热搜榜下的数据
+     */
+    private List<HotSearchItem> fetchFromWeibotop(Document doc, String apiName) {
+        List<HotSearchItem> items = new ArrayList<>();
+        
+        // 查找包含"微博热搜榜"标题的区域
+        Element weiboSection = null;
+        
+        // 方法1: 查找包含"微博热搜榜"文本的元素
+        Elements headings = doc.select("h1, h2, h3, h4, .title, .header, div[class*='title'], div[class*='header']");
+        for (Element heading : headings) {
+            String headingText = heading.text();
+            if (headingText.contains("微博热搜榜") || headingText.contains("微博热搜")) {
+                // 找到标题后的列表区域
+                Element parent = heading.parent();
+                if (parent != null) {
+                    // 查找父容器中的表格或列表
+                    Elements listItems = parent.select("tbody tr, table tr");
+                    if (listItems.size() > 5) {
+                        weiboSection = parent;
+                        logger.info("微博{}: 通过标题找到微博热搜榜区域，包含 {} 个列表项", apiName, listItems.size());
+                        break;
+                    }
+                }
+                // 或者查找下一个兄弟元素
+                Element nextSibling = heading.nextElementSibling();
+                if (nextSibling != null) {
+                    Elements listItems = nextSibling.select("tbody tr, table tr");
+                    if (listItems.size() > 5) {
+                        weiboSection = nextSibling;
+                        logger.info("微博{}: 通过兄弟元素找到微博热搜榜区域", apiName);
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // 方法2: 如果没找到，查找包含"榜单时间"的元素（这是微博热搜榜的特征）
+        if (weiboSection == null) {
+            Elements timeElements = doc.select("*:contains(榜单时间), *:contains(实时更新)");
+            for (Element timeEl : timeElements) {
+                Element parent = timeEl.parent();
+                if (parent != null) {
+                    Elements listItems = parent.select("tbody tr, table tr");
+                    if (listItems.size() > 5) {
+                        weiboSection = parent;
+                        logger.info("微博{}: 通过'榜单时间'找到微博热搜榜区域", apiName);
+                        break;
+                    }
+                }
+            }
+        }
+        
+        Elements listItems;
+        if (weiboSection != null) {
+            // 在微博热搜榜区域内查找列表项
+            listItems = weiboSection.select("tbody tr");
+            logger.info("微博{}: 在微博热搜榜区域内找到 {} 个tr元素", apiName, listItems.size());
+        } else {
+            // 如果找不到明确区域，尝试全局查找表格行
+            listItems = doc.select("tbody tr");
+            logger.warn("微博{}: 未找到明确的微博热搜榜区域，使用全局查找", apiName);
+        }
+        
+        int rank = 1;
+        for (Element item : listItems) {
+            if (rank > 50) break;
+            
+            // 查找标题链接
+            Element link = item.selectFirst("a");
+            if (link == null) continue;
+            
+            String title = link.text().trim();
+            if (title.isEmpty() || title.length() < 3) continue;
+            
+            // 过滤掉非热搜标题
+            if (title.matches("^\\d+$") || title.contains("排名") || title.contains("热搜榜") || 
+                title.contains("跳转") || title.contains("在榜") || title.contains("今日最高排名")) {
+                continue;
+            }
+            
+            // 提取热度 - 从表格中查找热度数据
+            String heatStr = "";
+            Elements heatElements = item.select("td");
+            for (Element td : heatElements) {
+                String tdText = td.text().trim();
+                if (tdText.matches(".*\\d+.*")) {
+                    // 尝试提取热度数字
+                    Pattern pattern = Pattern.compile("(\\d+)");
+                    Matcher matcher = pattern.matcher(tdText);
+                    if (matcher.find()) {
+                        String num = matcher.group(1);
+                        // 如果数字大于1000，可能是热度值
+                        if (num.length() >= 4) {
+                            heatStr = tdText;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            long heat = parseHeat(heatStr);
+            
+            // 提取链接URL
+            String itemUrl = link.attr("href");
+            if (itemUrl == null || itemUrl.isEmpty() || !itemUrl.startsWith("http")) {
+                itemUrl = generateUrl(title);
+            }
             
             HotSearchItem hotItem = new HotSearchItem();
             hotItem.setPlatform(PlatformType.WEIBO);
