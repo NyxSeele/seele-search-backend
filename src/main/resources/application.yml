@@ -5,7 +5,7 @@ spring:
     url: jdbc:mysql://${DB_HOST:hot-search-mysql-mysql.ns-bsze9qn7.svc}:${DB_PORT:3306}/${DB_NAME:hot_search_ai}?useSSL=false&serverTimezone=UTC&characterEncoding=utf8&allowPublicKeyRetrieval=true
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:ngtcbtwd}
+    password: ${DB_PASSWORD:}
 
   jpa:
     hibernate:
@@ -20,7 +20,7 @@ spring:
       database: 0
       host: ${REDIS_HOST:hot-search-redis-redis.ns-bsze9qn7.svc}
       port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:sctgr9hg}
+      password: ${REDIS_PASSWORD:}
       timeout: 5s
   cache:
     type: redis
