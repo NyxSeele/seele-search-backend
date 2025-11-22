@@ -109,11 +109,11 @@ public class AICoreService {
     
     private String generateMockResponse(String prompt) {
         if (prompt.contains("trend") || prompt.contains("summary")) {
-            return "{\"summary\": \"Current trending topics include technology, entertainment, and social issues.\", \"coreTopics\": [{\"topic\": \"Technology\", \"description\": \"AI and innovation\"}, {\"topic\": \"Entertainment\", \"description\": \"Movies and celebrities\"}]}";
+            return "{\"summary\": \"当前热门话题包括科技、娱乐和社会问题。\", \"coreTopics\": [{\"topic\": \"科技\", \"description\": \"人工智能与创新\"}, {\"topic\": \"娱乐\", \"description\": \"电影与明星\"}]}";
         } else if (prompt.contains("evaluate")) {
-            return "{\"background\": \"This is a trending topic\", \"impactAssessment\": \"High public interest\"}";
+            return "{\"background\": \"这是一个热门话题\", \"impactAssessment\": \"公众关注度较高\"}";
         } else {
-            return "{\"answer\": \"Based on current hot search data, the main trends are...\"}";
+            return "{\"answer\": \"抱歉，AI服务暂时不可用。请检查API密钥配置或稍后重试。\"}";
         }
     }
 }

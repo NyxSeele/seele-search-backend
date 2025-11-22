@@ -205,11 +205,13 @@ public class AIServiceImpl implements AIService {
                     .append("，分类: ").append(Optional.ofNullable(item.getCategory()).orElse("未分类"))
                     .append("\n"));
             prompt.append("\n回答要求：\n");
-            prompt.append("1. 先用一句话概括整体态势；\n");
-            prompt.append("2. 然后用分点形式给出2-4条关键判断；\n");
-            prompt.append("3. 每条判断控制在25-40字；\n");
-            prompt.append("4. 如果数据不足，请直说而不是编造；\n");
-            prompt.append("5. 输出格式必须是 JSON 对象：{\"answer\": \"...\"}，不要包含 markdown 或额外字段。\n");
+            prompt.append("1. 必须用中文回答，语言自然流畅；\n");
+            prompt.append("2. 先用一句话概括整体态势；\n");
+            prompt.append("3. 然后用分点形式给出2-4条关键判断；\n");
+            prompt.append("4. 每条判断控制在25-40字；\n");
+            prompt.append("5. 如果数据不足，请直说而不是编造；\n");
+            prompt.append("6. 回答要完整，不要出现省略号或未完成的句子；\n");
+            prompt.append("7. 输出格式必须是 JSON 对象：{\"answer\": \"...\"}，不要包含 markdown 或额外字段。\n");
 
             String aiResponse = aiCoreService.callDashScopeAPI(prompt.toString());
             QNAResponse response = parseQNAResponse(aiResponse, conversationId);
@@ -224,14 +226,16 @@ public class AIServiceImpl implements AIService {
 
     private QNAResponse buildWebSearchAnswer(String question, String conversationId) throws Exception {
         StringBuilder prompt = new StringBuilder();
-        prompt.append("你是一个实时联网的中文助手。你可以访问最新的互联网搜索结果。");
+        prompt.append("你是一个实时联网的中文助手。你可以访问最新的互联网搜索结果。\n");
         prompt.append("请严格按照下面格式输出：\n");
         prompt.append("{\"answer\":\"(用一到两段中文直接回答，禁止出现markdown、列表、星号或额外字段)\"}\n");
         prompt.append("要求：\n");
-        prompt.append("1. 首句给出明确结论；\n");
-        prompt.append("2. 若引用事实，可在句末用括号标注来源网站名；\n");
-        prompt.append("3. 若搜索无结果，请写“未检索到相关信息”；\n");
-        prompt.append("4. 严禁出现中文冒号或“answer：”这类前缀，必须保持 JSON 键为英文冒号。\n");
+        prompt.append("1. 必须用中文回答，语言自然流畅；\n");
+        prompt.append("2. 首句给出明确结论；\n");
+        prompt.append("3. 若引用事实，可在句末用括号标注来源网站名；\n");
+        prompt.append("4. 若搜索无结果，请写\"未检索到相关信息\"；\n");
+        prompt.append("5. 严禁出现中文冒号或\"answer：\"这类前缀，必须保持 JSON 键为英文冒号。\n");
+        prompt.append("6. 回答要完整，不要出现省略号或未完成的句子。\n");
         prompt.append("用户问题：").append(question).append("\n");
 
         String aiResponse = aiCoreService.callDashScopeAPI(prompt.toString(), question);
@@ -418,7 +422,7 @@ public class AIServiceImpl implements AIService {
         response.setConversationId(conversationId);
 
         if (aiResponse == null || aiResponse.trim().isEmpty()) {
-            response.setAnswer("AI service temporarily unavailable, please try again later.");
+            response.setAnswer("AI服务暂时不可用，请稍后重试。");
             response.setStatus("EMPTY_RESPONSE");
             return response;
         }
@@ -429,7 +433,11 @@ public class AIServiceImpl implements AIService {
         // Attempt direct JSON parsing first
         try {
             JsonNode root = objectMapper.readTree(cleaned);
-            response.setAnswer(root.path("answer").asText("Unable to generate answer"));
+            String answer = root.path("answer").asText("");
+            if (answer.isEmpty()) {
+                answer = "无法生成回答，请稍后重试。";
+            }
+            response.setAnswer(answer);
             response.setStatus("STRUCTURED");
             return response;
         } catch (Exception ignored) {
@@ -449,7 +457,7 @@ public class AIServiceImpl implements AIService {
             return response;
         }
 
-        response.setAnswer("AI service temporarily unavailable, please try again later.");
+        response.setAnswer("AI服务暂时不可用，请稍后重试。");
         response.setStatus("EMPTY_RESPONSE");
         return response;
     }
@@ -504,7 +512,30 @@ public class AIServiceImpl implements AIService {
     private QNAResponse createFallbackQNAResponse(String question, String conversationId) {
         QNAResponse response = new QNAResponse();
         response.setConversationId(conversationId);
-        response.setAnswer("AI service temporarily unavailable, please try again later.");
+        // 尝试使用AI回答通用问题，即使没有热搜数据
+        try {
+            StringBuilder prompt = new StringBuilder();
+            prompt.append("你是一个专业的中文助手。请用中文直接回答用户的问题。\n");
+            prompt.append("用户问题：").append(question).append("\n\n");
+            prompt.append("回答要求：\n");
+            prompt.append("1. 用中文回答，语言自然流畅；\n");
+            prompt.append("2. 如果问题涉及具体人物、事件或概念，请提供准确的信息；\n");
+            prompt.append("3. 如果无法确定答案，请诚实说明；\n");
+            prompt.append("4. 输出格式必须是 JSON 对象：{\"answer\": \"...\"}，不要包含 markdown 或额外字段。\n");
+            
+            String aiResponse = aiCoreService.callDashScopeAPI(prompt.toString());
+            QNAResponse aiResponseObj = parseQNAResponse(aiResponse, conversationId);
+            if (aiResponseObj.getAnswer() != null && 
+                !aiResponseObj.getAnswer().contains("暂时不可用") && 
+                !aiResponseObj.getAnswer().isEmpty()) {
+                aiResponseObj.setStatus("AI_GENERAL");
+                return aiResponseObj;
+            }
+        } catch (Exception e) {
+            logger.warn("Fallback AI answer failed", e);
+        }
+        
+        response.setAnswer("抱歉，我暂时无法回答这个问题。请尝试询问与热搜相关的问题，或稍后重试。");
         response.setStatus("FALLBACK");
         response.setRelatedHotSearches(Collections.emptyList());
         return response;

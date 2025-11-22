@@ -17,6 +17,11 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        // 允许OPTIONS预检请求通过，不进行限流
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            return true;
+        }
+        
         String clientIp = request.getRemoteAddr();
         AtomicInteger count = requestCounts.computeIfAbsent(clientIp, k -> new AtomicInteger(0));
         
