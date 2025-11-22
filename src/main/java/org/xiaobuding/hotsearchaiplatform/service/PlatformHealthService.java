@@ -69,7 +69,7 @@ public class PlatformHealthService {
         long failureCount = getFailureCount(metadata.failureKey());
         List<HotSearchItem> cachedItems = getCachedItems(metadata.cacheKey());
         boolean degraded = isDegraded(cachedItems, metadata.degradePrefix());
-        LocalDateTime lastUpdated = cachedItems.isEmpty() ? null : cachedItems.getFirst().getCapturedAt();
+        LocalDateTime lastUpdated = cachedItems.isEmpty() ? null : cachedItems.get(0).getCapturedAt();
 
         Status status = determineStatus(failureCount, metadata.alertThreshold(), degraded, cachedItems.isEmpty());
         String message = buildMessage(status, failureCount, cachedItems.size());
