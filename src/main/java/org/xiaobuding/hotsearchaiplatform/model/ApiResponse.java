@@ -4,7 +4,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * 缁熶竴鐨?API 鍝嶅簲鏍煎紡
+ * 统一的 API 响应格式
  */
 public class ApiResponse<T> implements Serializable {
     private static final long serialVersionUID = 1L;

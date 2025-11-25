@@ -9,19 +9,19 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 /**
- * 瓒嬪娍鎬荤粨鏁版嵁璁块棶灞?
+ * 趋势总结相关的数据访问层
  */
 @Repository
 public interface TrendSummaryRepository extends JpaRepository<TrendSummaryEntity, Long> {
 
     /**
-     * 鑾峰彇鏈€鏂扮殑瓒嬪娍鎬荤粨
+     * 获取最新生成的趋势总结
      */
     @Query(value = "SELECT * FROM trend_summaries ORDER BY generated_at DESC LIMIT 1", nativeQuery = true)
     Optional<TrendSummaryEntity> findLatest();
 
     /**
-     * 鑾峰彇鎸囧畾鏃堕棿涔嬪悗鐨勮秼鍔挎€荤粨
+     * 获取指定时间之后的趋势总结
      */
     Optional<TrendSummaryEntity> findByGeneratedAtAfter(LocalDateTime generatedAt);
 }

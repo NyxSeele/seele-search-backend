@@ -1,7 +1,7 @@
 package org.xiaobuding.hotsearchaiplatform.exception;
 
 /**
- * 楠岃瘉寮傚父
+ * 输入或参数校验失败时抛出的异常
  */
 public class ValidationException extends RuntimeException {
     private String fieldName;

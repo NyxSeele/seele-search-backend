@@ -1,7 +1,7 @@
 package org.xiaobuding.hotsearchaiplatform.exception;
 
 /**
- * AI 鏈嶅姟寮傚父
+ * AI 服务调用失败或降级时抛出的异常
  */
 public class AIServiceException extends RuntimeException {
     private boolean isDegraded;

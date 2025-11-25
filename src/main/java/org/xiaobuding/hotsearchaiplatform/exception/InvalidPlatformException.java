@@ -1,7 +1,7 @@
 package org.xiaobuding.hotsearchaiplatform.exception;
 
 /**
- * 骞冲彴绫诲瀷杞崲寮傚父
+ * 平台类型转换失败时抛出的异常
  */
 public class InvalidPlatformException extends RuntimeException {
     private String validPlatforms;

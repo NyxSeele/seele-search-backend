@@ -16,10 +16,10 @@ public class AsyncConfig {
     public Executor hotSearchExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setThreadNamePrefix("hot-search-");
-        // 浼樺寲锛氬鍔犳牳蹇冪嚎绋嬫暟浠?鍒?锛屾彁楂樺苟鍙戝鐞嗚兘鍔?
+        // 优化：核心线程数设为 8，用于支撑多源热搜抓取
         executor.setCorePoolSize(8);
         executor.setMaxPoolSize(16);
-        // 浼樺寲锛氬鍔犻槦鍒楀閲忎粠20鍒?00锛屽噺灏戜换鍔℃嫆缁?
+        // 优化：队列容量扩展至 100，降低高峰期丢任务的风险
         executor.setQueueCapacity(100);
         executor.setKeepAliveSeconds(60);
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());

@@ -1,7 +1,7 @@
 package org.xiaobuding.hotsearchaiplatform.exception;
 
 /**
- * 鐑悳椤圭洰涓嶅瓨鍦ㄥ紓甯?
+ * 热搜条目不存在时抛出的异常
  */
 public class ItemNotFoundException extends RuntimeException {
     private String itemId;

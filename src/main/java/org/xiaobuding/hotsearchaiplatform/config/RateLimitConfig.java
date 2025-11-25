@@ -7,19 +7,19 @@ import org.xiaobuding.hotsearchaiplatform.interceptor.RateLimitInterceptor;
 import org.xiaobuding.hotsearchaiplatform.interceptor.OperationLoggingInterceptor;
 
 /**
- * API 闄愭祦鍜屾棩蹇楅厤缃?
+ * API 限流与操作日志相关的拦截器配置
  */
 @Configuration
 public class RateLimitConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        // 鎿嶄綔鏃ュ織鎷︽埅鍣紙浼樺厛绾ф渶楂橈級
+        // 先记录操作日志，完整保留访问链路信息
         registry.addInterceptor(new OperationLoggingInterceptor())
                 .addPathPatterns("/api/**")
                 .order(1);
 
-        // 闄愭祦鎷︽埅鍣?
+        // 再进行限流控制，保障 AI 接口安全
         registry.addInterceptor(new RateLimitInterceptor())
                 .addPathPatterns("/api/ai/**")
                 .excludePathPatterns("/api/ai/health")
